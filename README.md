@@ -8,31 +8,18 @@ To write a program to implement the K Means Clustering for Customer Segmentation
 2. Anaconda – Python 3.7 Installation / Jupyter notebook
 
 ## Algorithm
-1. Import the required Python libraries.
+1. Import required libraries
+2. Load the dataset (Mall_Customers.csv)
+3. Check dataset info,Check for missing values
+4. Select features: Annual Income and Spending Score
+5. Standardize the selected features
+6. Apply Elbow method for k = 1 to 10 and Plot
+7. Apply Silhouette Score for k = 2 to 10 and Plot 
+8. Fit K-Means model
+9. Predict cluster labels and add cluster labels to the dataset
+10.Compute cluster centers
+11. Visualize clusters using scatter plot
 
-2. Load the spam mail dataset (spam.csv).
-
-3. Select the relevant columns (message and label).
-
-4. Encode the class labels (spam = 1, ham = 0).
-
-5. Visualize the distribution of spam and ham emails.
-
-6. Separate features (email text) and target labels.
-
-7. Split the dataset into training and testing sets.
-
-8. Convert text data into numerical features using TF-IDF.
-
-9. Initialize the Support Vector Machine classifier.
-
-10. Define hyperparameters and perform Grid Search for tuning.
-
-11. Train the SVM model using the best parameters.
-
-12. Predict the class labels for test data.
-
-13. Evaluate the model using accuracy, confusion matrix, and classification report.
 
 ## Program:
 ```
@@ -43,105 +30,156 @@ RegisterNumber:  212224110007
 */
 ```
 ```python
-# Exp 11 – SVM for Spam Mail Detection with Visualization
 
-# 1. Import Required Libraries
-import chardet
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
+from sklearn.cluster import KMeans
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import silhouette_score
+import warnings
+warnings.filterwarnings("ignore")
 
-from sklearn.model_selection import train_test_split
-from sklearn.feature_extraction.text import CountVectorizer
-from sklearn.svm import SVC
-from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
+# ---------------------------------------
+# 1. Load the dataset
+# ---------------------------------------
+df = pd.read_csv("Mall_Customers.csv")  # UPDATE PATH IF NEEDED
+print("Dataset Loaded Successfully!")
+print("Shape:", df.shape)
+display(df.head())
 
-# 2. Detect File Encoding
-file_path = "spam.csv"   # use "/content/spam.csv" for Colab
+# ---------------------------------------
+# 2. Check info and missing values
+# ---------------------------------------
+print("\nDataset Info:")
+display(df.info())
+print("\nMissing Values:")
+display(df.isnull().sum())
 
-with open(file_path, 'rb') as rawdata:
-    result = chardet.detect(rawdata.read(100000))
+# ---------------------------------------
+# 3. Select features for clustering
+# Using Income & Spending Score
+# ---------------------------------------
+features = ["Annual Income (k$)", "Spending Score (1-100)"]
+X = df[features]
 
-print("Detected Encoding:", result)
+print("\nFeatures Used:", features)
 
-# 3. Load Dataset
-data = pd.read_csv(file_path, encoding=result['encoding'])
+# ---------------------------------------
+# 4. Standardize the data
+# ---------------------------------------
+scaler = StandardScaler()
+X_scaled = scaler.fit_transform(X)
 
-# 4. Basic Data Exploration
-print(data.head())
-print(data.info())
-print(data.isnull().sum())
+# ---------------------------------------
+# 5. Elbow Method to choose k
+# ---------------------------------------
+inertia = []
+K_range = range(1, 11)
 
-# 5. Visualization: Spam vs Ham Distribution
-plt.figure(figsize=(5,4))
-sns.countplot(x=data['v1'])
-plt.title("Distribution of Spam and Ham Messages")
-plt.xlabel("Message Type")
-plt.ylabel("Count")
-plt.show()
-
-# 6. Message Length Visualization
-data['msg_length'] = data['v2'].apply(len)
+for k in K_range:
+    km = KMeans(n_clusters=k, random_state=42)
+    km.fit(X_scaled)
+    inertia.append(km.inertia_)
 
 plt.figure(figsize=(6,4))
-sns.histplot(data=data, x='msg_length', hue='v1', bins=50, kde=True)
-plt.title("Message Length Distribution (Spam vs Ham)")
-plt.xlabel("Message Length")
-plt.ylabel("Frequency")
+plt.plot(K_range, inertia, marker='o')
+plt.xlabel("Number of Clusters (k)")
+plt.ylabel("Inertia / SSE")
+plt.title("Elbow Method")
+plt.grid(True)
 plt.show()
 
-# 7. Feature and Target Selection
-x = data['v2'].values     # messages
-y = data['v1'].values     # labels
+# ---------------------------------------
+# 6. Silhouette Scores
+# ---------------------------------------
+sil_scores = []
+for k in range(2, 11):
+    km = KMeans(n_clusters=k, random_state=42)
+    labels = km.fit_predict(X_scaled)
+    sil_scores.append(silhouette_score(X_scaled, labels))
 
-# 8. Train-Test Split
-x_train, x_test, y_train, y_test = train_test_split(
-    x, y, test_size=0.2, random_state=0
+plt.figure(figsize=(6,4))
+plt.plot(range(2, 11), sil_scores, marker='o', color="orange")
+plt.xlabel("Number of Clusters (k)")
+plt.ylabel("Silhouette Score")
+plt.title("Silhouette Method")
+plt.grid(True)
+plt.show()
+
+# ---------------------------------------
+# 7. Apply KMeans (Choose k=5 by elbow)
+# ---------------------------------------
+k_final = 5
+kmeans = KMeans(n_clusters=k_final, random_state=42)
+cluster_labels = kmeans.fit_predict(X_scaled)
+
+df["Cluster"] = cluster_labels
+print("\nCluster Counts:")
+print(df["Cluster"].value_counts())
+
+# ---------------------------------------
+# 8. Cluster Centers in original units
+# ---------------------------------------
+centers_scaled = kmeans.cluster_centers_
+centers_original = scaler.inverse_transform(centers_scaled)
+
+centers_df = pd.DataFrame(centers_original, columns=features)
+centers_df["Cluster"] = range(k_final)
+
+print("\nCluster Centers (Original Values):")
+display(centers_df.round(2))
+
+# ---------------------------------------
+# 9. Visualization of Clusters
+# ---------------------------------------
+plt.figure(figsize=(8,6))
+sns.scatterplot(
+    data=df,
+    x="Annual Income (k$)",
+    y="Spending Score (1-100)",
+    hue="Cluster",
+    palette="tab10",
+    s=70
 )
 
-# 9. Text Vectorization (Bag of Words)
-cv = CountVectorizer()
-x_train_vec = cv.fit_transform(x_train)
-x_test_vec = cv.transform(x_test)
+# Show cluster centers
+plt.scatter(
+    centers_df["Annual Income (k$)"],
+    centers_df["Spending Score (1-100)"],
+    s=250,
+    c="black",
+    marker="X",
+    label="Centroids"
+)
 
-# 10. Initialize and Train SVM
-svc = SVC(kernel='linear')
-svc.fit(x_train_vec, y_train)
-
-# 11. Prediction
-y_pred = svc.predict(x_test_vec)
-
-# 12. Evaluation
-print("Accuracy:", accuracy_score(y_test, y_pred))
-print("\nClassification Report:\n", classification_report(y_test, y_pred))
-
-# 13. Confusion Matrix Visualization
-cm = confusion_matrix(y_test, y_pred)
-
-plt.figure(figsize=(5,4))
-sns.heatmap(cm, annot=True, fmt='d', cmap='Blues',
-            xticklabels=['Ham', 'Spam'],
-            yticklabels=['Ham', 'Spam'])
-plt.title("Confusion Matrix – SVM Spam Detection")
-plt.xlabel("Predicted Label")
-plt.ylabel("Actual Label")
+plt.title("Customer Segmentation using K-Means (k=5)")
+plt.legend()
+plt.grid(True)
 plt.show()
+
+
+
 
 ```
 
 ## Output:
 
-<img width="1017" height="570" alt="image" src="https://github.com/user-attachments/assets/07df13b6-3ab1-4207-a71c-d6d9bed226b2" />
-
-<img width="472" height="391" alt="image" src="https://github.com/user-attachments/assets/fd8000c5-9de4-4441-afd0-3068a791a8ab" />
-
-<img width="549" height="391" alt="image" src="https://github.com/user-attachments/assets/8250a2a8-9f0c-4f7d-8edf-471c92457740" />
-
-<img width="537" height="195" alt="image" src="https://github.com/user-attachments/assets/883c5993-6715-4f17-87d1-9d981115a505" />
+<img width="682" height="665" alt="image" src="https://github.com/user-attachments/assets/4b0acfe9-5f7a-450c-a16e-5e98df204bac" />
 
 
-<img width="444" height="391" alt="image" src="https://github.com/user-attachments/assets/c1c867b6-0f54-4389-bc2a-3c873971045d" />
+<img width="540" height="391" alt="image" src="https://github.com/user-attachments/assets/d5c830ac-245b-4dba-97ab-4cf0fe515792" />
+
+
+<img width="545" height="391" alt="image" src="https://github.com/user-attachments/assets/938e3566-04ab-4cf3-a9d9-2549a77d3abc" />
+
+
+<img width="871" height="372" alt="image" src="https://github.com/user-attachments/assets/aaa6ac94-196a-4a35-b130-843ccc03dcfd" />
+
+
+<img width="695" height="545" alt="image" src="https://github.com/user-attachments/assets/27193fad-e8a7-4f15-9b05-3bc727f85392" />
+
 
 
 
